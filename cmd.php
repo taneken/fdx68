@@ -37,28 +37,40 @@ if(isset($_GET['cmd'])){
 		break;
 	case 'dir':
 		$path = $_GET['path'];
-		$fdx_file = array();
+		$queue = array();
+		$type = array();
 		$other_file = array();
 
 		if($dir = opendir($path)) {
 			while(($file = readdir($dir)) !== false) {
 				$file_path = $path.$file;
+
+				// directory判別
+				if (is_dir($file_path) && $file != '.' && $file !='..') {
+//					$queue[$file] = 'DIR';
+					$queue[] = array('file'=>$file,'ext'=>'DIR','path'=>$path);	//連想配列で格納
+				} else 
 				if(is_file($file_path)) {
 					// file一覧(とりあえずサブディレクトリは無視)
 					$path_data = pathinfo($file);
 					$ext = strtoupper($path_data['extension']);		//拡張子を取得して大文字に変換
+
+					$queue[] = array('file'=>$file,'ext'=>$ext,'path'=>$path);	//連想配列で格納
+/*
 					if($ext === 'FDX') {
-						$fdx_file[] = $file;
+						$queue[$file] = 'FDX';
 					} else if(in_array($ext, $fddType)) {
-						$other_file[] = $file;
+						//$other_file[] = $file;
+						$queue[$file] = 'OTH';
 					}
+*/
 				}
 			}
 		}
 		closedir($dir);
 
-//		natcasesort($fdx_file);				
-		echo json_encode($fdx_file);
+//		ksort($queue);				
+		echo json_encode($queue);
 		break;
 	default:
 		break;

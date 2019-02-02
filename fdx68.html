@@ -1,6 +1,7 @@
+<!DOCTYPE html>
 <html>
 <head>
-<title>FDX68</title>
+<title>FDX68 FILE SELECTER</title>
 <meta charset="UTF-8">
 <style>
 
@@ -91,6 +92,18 @@ li	{
   margin:auto;
   font-family:Consolas,sans-serif;
   font-size: 4vw;
+  padding-bottom:10px;
+}
+
+li.dir {
+	list-style:none;
+	padding-left:0;
+}
+li.dir::before {
+//	content:'(DIR)';
+}
+li.link	{
+//	margin-left:1em;
 }
 
 a:link {
@@ -106,40 +119,40 @@ a:hover {
 
 // global変数
 var file = "";
-var path = "/home/pi/fdd/";
+var root_path = "/home/pi/fdd/";
 
 $(function() {
   $("#status").html(fddctl());	//fddctl -l実行
-  $("#list").html(dirlist(path));	//ファイル一覧を表示
-  $('#pathname').html(path);
+  $('#pathname').html(root_path);
+  $("#list").html(dirlist(root_path));	//ファイル一覧を表示
 
   $('#open').on('click', function() { $('#overlay, #modalWindow').fadeIn(); });
-//  $('#close').on('click', function() { $('#overlay, #modalWindow').hide(); });
   $('#close').on('click', function() { $('#overlay, #modalWindow').fadeOut(); });
 
   $('#fddemu').on('click', function() { fddemu(); });
   $('.eject').on('click', function() { eject($(this).val()); });
   $('.insert').on('click', function() { insert($(this).val(),file); });
 
-/*
-  $('.eject, .insert')
-	.on('mouseenter touchstart', function() {
-		$(this).addClass('hover');
-  }).on('mouseleave touchend', function() {
-		$(this).removeClass('hover');
-  });
-*/
-
-  //FDXの場合、XDF,2HDの場合、ディレクトリの場合で挙動を変える
-  $('a.link').on('click', function() {
-	file = $(this).attr('href');			// hrefからファイルパスを取得
-	//ディレクトリの場合はチェンジディレクトリ
-
-	$('#filename').html($(this).text());	// textからファイル名を取得
-	$('#overlay, #modalWindow').fadeIn();	// モーダルウィンドウ表示
-	return false;							// a hrefのlinkを無効にする
+//	FDXの場合、XDF,2HDの場合で挙動を変える
+//  $('li.link a').on('click', function() {				//すでに存在する要素にしか反応しない
+  $(document).on('click', 'li.link a', function() {		//あとから追加された要素に対してもイベント発生させるためにはコレ
+	file = $(this).attr('href');						// hrefからファイルパスを取得
+	$('#filename').html($(this).text());				// textからファイル名を取得
+	$('#overlay, #modalWindow').fadeIn();				// モーダルウィンドウ表示
+	return false;										// a hrefのlinkを無効にする
   });
 
+  //directoryの場合、追記する
+//  $('li.dir a').on('click', function() {				//すでに存在する要素にしか反応しない
+  $(document).on('click', 'li.dir a', function() {		//あとから追加された要素に対してもイベント発生させるためにはコレ
+	if ($(this).next('ul')[0]) {						//すでにディレクトリ内を追加済なら
+		$(this).next('ul').remove();					//要素を削除する
+	} else {
+//		dir = $(this).attr('href');						// hrefからファイルパスを取得
+		$(this).after(dirlist($(this).attr('href')));	//要素を追加する
+	}
+	return false;										// a hrefのlinkを無効にする
+  });
 
   locateCenter();							// モーダルウィンドウの位置調整
   $(window).resize(locateCenter);
@@ -160,26 +173,38 @@ function locateCenter() {
 */
 }
 
-function dirlist(path) {
-    var result = "";
+function dirlist(_path) {
+    var dir_result = "";
+    var file_result = "";
     $.ajax({
+		type:'GET',
         url:'cmd.php',
-        type:'get', dataType: 'json', async: false,
-        data:{ cmd:'dir',path:path, },
+        dataType: 'json', async: false,
+        data:{ cmd:'dir',path:_path, },
     }).fail(function(){
-        alert('error');
+		dir_result = "ディレクトリを開けません";
     }).done(function(hoge){
-		hoge.sort();
-        $.each(hoge,function(index,data) {
-			result += "<li><a class=link href='"+path+data+"'>"+data+"</a></li>\n";
+    	hoge.sort(function(a, b) {	//ファイル名順にソート
+        	return (a.file < b.file) ? -1 : 1;
+    	});
+
+		// fileとdirectoryでclassを分ける
+        $.each(hoge,function(index,que) {	//queは連想配列
+			if (que.ext == "DIR") {
+				dir_result += "<li class=dir><a href='"+que.path+que.file+"/'>["+que.file+"]</a></li>\n";
+			} else {
+//				file_result += "<li class=link><a href='"+que.path+que.file+"'>"+que.file+"("+que.ext+")</a></li>\n";
+				file_result += "<li class=link><a href='"+que.path+que.file+"'>"+que.file+"</a></li>\n";
+			}
         });
     });
-    return result;
+    return "<ul>"+dir_result+file_result+"</ul>";	//directoryが先頭に来るようにする
 }
 function fddemu() {
     $.ajax({
+		type:'GET',
         url:'cmd.php',
-        type:'get', async: false,
+        async: false,
         data:{  cmd:'fddemu' },
     }).fail(function(){
         alert('error');
@@ -191,8 +216,9 @@ function fddemu() {
 function fddctl() {
     var result = "";
     $.ajax({
+		type:'GET',
         url:'cmd.php',
-        type:'get', dataType: 'json', async: false,
+        dataType: 'json', async: false,
         data:{ cmd:'list' },
     }).fail(function(){
         alert('error');
@@ -202,18 +228,19 @@ function fddctl() {
     	        result += data+"\n";
         	});
 		} else {
-    		result = "<button id='fddemu'>fddemuを起動する</button>";		//固定幅で表示したいのでpre
+    		result = "<button id='fddemu'>fddemuを起動する</button>";
 		};
     });
     return "<pre>"+result+"</pre>";		//固定幅で表示したいのでpre
 }
 
-function insert(drive_number,file) {
-//	alert(drive_number+":"+file);
+function insert(_drive_number,_file) {
+//	alert(d_rive_number+":"+_file);
     $.ajax({
+		type:'GET',
         url:'cmd.php',
-        type:'get', async: false,
-        data:{  cmd:'insert', drive:drive_number, file:file, },
+        async: false,
+        data:{  cmd:'insert', drive:_drive_number, file:_file, },
     }).fail(function(){
         alert('error');
     }).done(function(){
@@ -222,12 +249,13 @@ function insert(drive_number,file) {
     $('#overlay, #modalWindow').fadeOut();
 }
 
-function eject(drive_number) {
-//	alert(drive_number);
+function eject(_drive_number) {
+//	alert(_drive_number);
     $.ajax({
+		type:'GET',
         url:'cmd.php',
-        type:'get', async: false,
-        data:{ cmd:'eject',drive:drive_number },
+        async: false,
+        data:{ cmd:'eject',drive:_drive_number },
     }).fail(function(){
         alert('error');
     }).done(function(){
@@ -239,11 +267,13 @@ function eject(drive_number) {
 </head>
 
 <body>
+<div id=header>
 <h1>FDX68</h1>
-<div id="status"></div>
-<div>
+<p id="status"></p>
+<p>
 <button class="eject" value=0>EJECT 0</button>
 <button class="eject" value=1>EJECT 1</button>
+</p>
 </div>
 
 <!--<button id="open">Open</button>-->
@@ -257,8 +287,11 @@ function eject(drive_number) {
   <button id="close">Close</button>
 </div>
 
+<!---->
+<div>
 <p>ファイル一覧 <span id="pathname"></span></p>
 <div id=list></div>
+</div>
 </body>
 </html>
 
