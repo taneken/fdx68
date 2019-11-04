@@ -240,7 +240,7 @@ function insert(_drive_number,_file) {
 		type:'GET',
         url:'cmd.php',
         async: false,
-        data:{  cmd:'insert', drive:_drive_number, file:_file, },
+        data:{  cmd:'insert', drive:_drive_number, file:'"'+_file+'"', },   //ファイル名スペース対策
     }).fail(function(){
         alert('error');
     }).done(function(){
