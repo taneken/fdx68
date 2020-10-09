@@ -1,135 +1,42 @@
 <!DOCTYPE html>
 <html>
+<!--
+  This is FDX68 FILE SELECTER v0.4
+  (C) 2019 by @taneken2000
+  See http://github.com/taneken/fdx68 for a copy of the source code.
+-->
 <head>
 <title>FDX68 FILE SELECTER</title>
 <meta charset="UTF-8">
-<style>
-
-html {
-	font-size: 3vw;
-}
-#overlay {
-  width: 100%;
-  height: 100%;
-  position: fixed;
-  top: 0;
-  left: 0;
-  background: rgba(0, 0, 0, 0.3);
-  display: none;
-  z-index: 1
- }
-
-#modalWindow {
-  width: 70%;
-  height: 35vw;
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  margin-left:-35%;
-  margin-top:-20%;
-  border: 2px solid #D04255;
-  background-color: #FFF;
-  display: none;
-  z-index: 2;
-}
-
-body {
-  text-align: center;
-  background-color:white;
-}
-
-h1 {
-  width: 100%;
-  height: 100%;
-  position:fixed;
-  top:0px;
-  left:0px;
-  color:#cccccc;
-  font-size:30vw;
-  font-family:Impact,sans-serif;
-  z-index: -1;
-}
-
-#status {
-//  width: 320px;
-  display:inline-block;
-  margin:auto;
-  text-align: left;
-  font-family:'ＭＳ ゴシック';
-}
-
-#fddemu {
-  width: 35vw;
-  height: 8vw;
-  font-size: 1.2em;
-  color: #4255D0;
-  background-color: #FFF;
-  border: solid 2px #4255D0;
-  border-radius: 16px;
-}
-
-button {
-  width: 24vw;
-  height: 8vw;
-  font-size: 1.2em;
-  color: #D04255;
-  background-color: #FFF;
-  border: solid 2px #D04255;
-  border-radius: 16px;
-}
-
-.hover {
-  transition: .3s;
-  background: #D04255;
-  color: #FFF;
-}
-
-div#list {
-	display:inline-block;
-	text-align:left;
-}
-li	{
-  margin:auto;
-  font-family:Consolas,sans-serif;
-  font-size: 4vw;
-  padding-bottom:10px;
-}
-
-li.dir {
-	list-style:none;
-	padding-left:0;
-}
-li.dir::before {
-//	content:'(DIR)';
-}
-li.link	{
-//	margin-left:1em;
-}
-
-a:link {
-	text-Decoration:none;
-}
-a:hover {
-	text-Decoration:underline;
-}
-
-</style>
 <script src="jquery-3.3.1.js"></script>
-<script>
-
+<script type="text/javascript">
 // global変数
 var file = "";
-var root_path = "/home/pi/fdd/";
+const FddType = ["FDI", "FDD", "NFD", "FDX", "XDF", "HDM", "2HD", "DUP", "IMG", "DIM", "D68", "D88", "D77"];
+//const FddType = ["FDX", "XDF", "HDM", "2HD", "DUP", "IMG", "DIM", "D68", "D88", "D77"];
+
+//************************************************************************************
+//イメージファイルの格納先を指定
+//var root_path = "/home/pi/fdd/";
+var root_path = "fdd/";
+
+// ドライブ番号表示の選択。どちらかをコメントにする
+//var drive = new Array(0,1);	// X68000 drive
+var drive = new Array(1,2);		// PC8801/PC98x1 drive
+//************************************************************************************
 
 $(function() {
-  $("#status").html(fddctl());	//fddctl -l実行
+  $('.drive0').html(drive[0]);
+  $('.drive1').html(drive[1]);
+  $("#navi").html(fddctl());	//fddctl -l実行
   $('#pathname').html(root_path);
   $("#list").html(dirlist(root_path));	//ファイル一覧を表示
 
   $('#open').on('click', function() { $('#overlay, #modalWindow').fadeIn(); });
   $('#close').on('click', function() { $('#overlay, #modalWindow').fadeOut(); });
 
-  $('#fddemu').on('click', function() { fddemu(); });
+  $('#fddemu').on('click', function() { fddemu_start(); });
+  $('#stop').on('click', function() { fddemu_stop(); });
   $('.eject').on('click', function() { eject($(this).val()); });
   $('.insert').on('click', function() { insert($(this).val(),file); });
 
@@ -156,6 +63,32 @@ $(function() {
 
   locateCenter();							// モーダルウィンドウの位置調整
   $(window).resize(locateCenter);
+
+// 戻るボタン
+  var appear = false;
+  var pagetop = $('#page_top');
+  $(window).scroll(function () {
+    if ($(this).scrollTop() > 100) {  //100pxスクロールしたら
+      if (appear == false) {
+        appear = true;
+        pagetop.stop().animate({
+          'right': '0px' //右から0pxの位置に
+        }, 300); //0.3秒かけて現れる
+      }
+    } else {
+      if (appear) {
+        appear = false;
+        pagetop.stop().animate({
+          'right': '-100px' //右から-50pxの位置に
+        }, 300); //0.3秒かけて隠れる
+      }
+    }
+  });
+  pagetop.click(function () {
+    $('body, html').animate({ scrollTop: 0 }, 500); //0.5秒かけてトップへ戻る
+    return false;
+  });
+
 });
 
 function locateCenter() {
@@ -193,14 +126,19 @@ function dirlist(_path) {
 			if (que.ext == "DIR") {
 				dir_result += "<li class=dir><a href='"+que.path+que.file+"/'>["+que.file+"]</a></li>\n";
 			} else {
-//				file_result += "<li class=link><a href='"+que.path+que.file+"'>"+que.file+"("+que.ext+")</a></li>\n";
-				file_result += "<li class=link><a href='"+que.path+que.file+"'>"+que.file+"</a></li>\n";
+				if (FddType.indexOf(que.ext) >= 0) {
+					file_result += "<li class=link><a href='"+que.path+que.file+"'>"+que.file+"</a></li>\n";
+// 登録拡張子以外は表示しない
+//				} else {
+//					file_result += "<li><a href='"+que.path+que.file+"'>"+que.file+"</a></li>\n";
+				}
 			}
         });
     });
     return "<ul>"+dir_result+file_result+"</ul>";	//directoryが先頭に来るようにする
 }
-function fddemu() {
+// fddemu 起動
+function fddemu_start() {
     $.ajax({
 		type:'GET',
         url:'cmd.php',
@@ -209,29 +147,53 @@ function fddemu() {
     }).fail(function(){
         alert('error');
     }).done(function(){
-        $("#status").html(fddctl());
+        $("#navi").html(fddctl());
     });
 }
 
-function fddctl() {
-    var result = "";
+// fddemu 停止
+function fddemu_stop() {
     $.ajax({
 		type:'GET',
         url:'cmd.php',
-        dataType: 'json', async: false,
+        async: false,
+        data:{  cmd:'stop' },
+    }).fail(function(){
+        alert('error');
+    }).done(function(){
+        $("#navi").html(fddctl());
+    });
+}
+
+//*******************************
+// fddctl status
+//*******************************
+function fddctl() {
+    var result = "";
+    var navi = "";
+    $.ajax({
+		type:'GET',
+        url:'cmd.php',
+        dataType: 'json',
+	 	async: false,
         data:{ cmd:'list' },
     }).fail(function(){
         alert('error');
     }).done(function(hoge){
 		if (hoge != "") {
 	        $.each(hoge,function(index,data) {
-    	        result += data+"\n";
+				if (index == "3") {
+ 		        	result += "DRIVE"+drive[0]+": " + data.split("|")[3].split('/').pop() + "<br>";
+				} else if (index == "4") {
+ 		        	result += "DRIVE"+drive[1]+": " + data.split("|")[3].split('/').pop() + "<br>";
+				}
         	});
 		} else {
     		result = "<button id='fddemu'>fddemuを起動する</button>";
 		};
     });
-    return "<pre>"+result+"</pre>";		//固定幅で表示したいのでpre
+
+    return result;
 }
 
 function insert(_drive_number,_file) {
@@ -240,11 +202,11 @@ function insert(_drive_number,_file) {
 		type:'GET',
         url:'cmd.php',
         async: false,
-        data:{  cmd:'insert', drive:_drive_number, file:'"'+_file+'"', },   //ファイル名スペース対策
+        data:{  cmd:'insert', drive:_drive_number, file:'"'+_file+'"', },	//ファイル名スペース対策
     }).fail(function(){
         alert('error');
     }).done(function(){
-        $("#status").html(fddctl());
+        $("#navi").html(fddctl());
     });
     $('#overlay, #modalWindow').fadeOut();
 }
@@ -259,7 +221,7 @@ function eject(_drive_number) {
     }).fail(function(){
         alert('error');
     }).done(function(){
-        $("#status").html(fddctl());
+        $("#navi").html(fddctl());
     });
 }
 
@@ -268,12 +230,18 @@ function eject(_drive_number) {
 
 <body>
 <div id=header>
-<h1>FDX68</h1>
-<p id="status"></p>
-<p>
-<button class="eject" value=0>EJECT 0</button>
-<button class="eject" value=1>EJECT 1</button>
-</p>
+  <button id="stop">fddemu<br>stop</button>
+  <div id=navi></div>
+  <div id=eject>
+    <button type=button class="eject" value=0>EJECT<span class=drive0></span></button>
+    <button class="eject" value=1>EJECT<span class=drive1></span></button>
+  </div>
+</div>
+
+<div id="header_margin" style="margin-top:100px"></div>
+<div id=contents>
+<p>FILE LIST : <span id="pathname"></span></p>
+<div id=list></div>
 </div>
 
 <!--<button id="open">Open</button>-->
@@ -281,17 +249,216 @@ function eject(_drive_number) {
 <div id="modalWindow">
   <p>ドライブの選択 <span id="filename"></span></p>
   <p>
-  <button class="insert" value="0">DRIVE 0</button>
-  <button class="insert" value="1">DRIVE 1</button>
+  <button class="insert" value="0">DRIVE <span class=drive0></span></button>
+  <button class="insert" value="1">DRIVE <span class=drive1></span></button>
   </p>
   <button id="close">Close</button>
 </div>
 
-<!---->
-<div>
-<p>ファイル一覧 <span id="pathname"></span></p>
-<div id=list></div>
-</div>
+<hr>
+<div id=footer>presented by <a href="http://retropc.net/gimons/fdx68/index.html" target="_blank">GIMONS DEVELOPER WORKS</a></div>
+<div id="page_top"><a href="#"></a></div>
 </body>
-</html>
 
+<style>
+
+html {
+	font-size: 3vw;
+	display:block;
+}
+#overlay {
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: none;
+  z-index: 1
+ }
+
+#modalWindow {
+  width: 70%;
+  height: 35vw;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin-left:-35%;
+  margin-top:-20%;
+  border: 2px solid #D04255;
+  background-color: #FFF;
+  display: none;
+  z-index: 2;
+}
+
+body {
+  text-align: center;
+  background-color:white;
+}
+
+#header {
+  width: 100%;
+  position:fixed;
+  top:0px;
+  left:0px;
+  color:#cccccc;
+//  font-size:30vw;
+  font-size:100%;
+  font-family:Impact,sans-serif;
+//  z-index: -1;
+  border-bottom:2px #999 ridge;
+  background-color:white;
+}
+
+#navi{
+	float:left;
+	text-align:left;
+}
+
+#status {
+//  width: 320px;
+//  border:1px solid;
+//  display:inline-block;
+  display:table;
+  margin:auto;
+  text-align: left;
+  font-family:'ＭＳ ゴシック';
+  font-size:2vw;
+}
+
+#fddemu, #stop {
+  float:left;
+  width: 12vw;
+  height: 8vw;
+//  font-size: 100%;
+  color: #4255D0;
+  background-color: #FFF;
+  border: solid 2px #4255D0;
+  border-radius: 16px;
+  text-align:center;
+}
+
+#eject {
+  float:right;
+  text-align:right;
+  position: relative;
+}
+
+button:hover {
+  background-color:pink;
+}
+
+#eject button {
+  width: 12vw;
+  height: 4vw;
+  display: block;
+}
+
+button {
+  width: 20vw;
+  height: 8vw;
+  font-size: 2vw;
+//  font-size: 100%;
+  color: #D04255;
+  background-color: #FFF;
+  border: solid 2px #D04255;
+  border-radius: 16px;
+  font-family:Impact,Verdana;
+//  font-family:Impact,sans-serif,Arial;
+  text-align:center;
+}
+
+.hover {
+  transition: .3s;
+  background: #D04255;
+  color: #FFF;
+}
+
+#contents {
+	display:block;
+}
+
+div#list {
+//	display:inline-block;
+	display:table;
+	text-align:left;
+}
+ul	{ margin:0;} 
+
+li	{
+  margin:auto;
+  font-family:Consolas,sans-serif;
+  font-size: 2.5vw;
+  padding-top:10px;
+  padding-bottom:10px;
+}
+
+li.dir {
+	list-style:none;
+	padding-left:0;
+}
+li.dir::before {
+//	content:'(DIR)';
+//	content: url("images/directory_open_cool-2.png");
+	content: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAIVBMVEUAAADMzGaZmWbq4XFmZmbMzJnx8fH374P//8yyrLD///8HcRbZAAAAAXRSTlMAQObYZgAAAAFiS0dECmjQ9FYAAAAHdElNRQfiBhgXAzSeRYh6AAAAeElEQVQoz2NgIAsICgoKIfMZjY2NDRWQBISBAsZCqApQlIAVGBsLQoACXAAKVMgRYAxFBkABsTQkkKIKFChHAkVOaAKFBAXKVYC2pCMLiJAlgOYQFzSBQqCARAcS6MSmghFFBdBQFGsKQQKJgkgAKMDgggwcCEc0APCdegmYz9y4AAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDE4LTA2LTI0VDIzOjAzOjUyLTA0OjAwbzzW+wAAACV0RVh0ZGF0ZTptb2RpZnkAMjAxOC0wNi0yNFQyMzowMzo1Mi0wNDowMB5hbkcAAAAASUVORK5CYII=");
+/*  content: '';
+  background-image: url("images/directory_open_cool-2.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  padding-left:32px;
+*/
+  vertical-align:middle;
+}
+li.link	{
+//	margin-left:1em;
+//  list-style-image: url("images/floppy_drive_5_25_cool-2.png");
+  list-style-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAASFBMVEUAAACGhoaAgIBmZmYzMzPMzJn//8xfX1+ysrJ3d3fx8fH4+Pjd3d3j4+PX19fLy8vMMzOZMzOgoKSZmZmWlpbq6urAwMD///92/lzeAAAAAXRSTlMAQObYZgAAAAFiS0dEFwvWmI8AAAAHdElNRQfiBhgXCCEQbLVaAAAArElEQVQ4y62TyxKDIBAE0UFhozEPQ/7/U6NAEBaQi32whOkasEAhLqbjsLwHR3JhGGMGlQspuTCm5IJOCnQuKEZFABHOBPRCeKMskH0/a6BGQ3MPmwH2FTdHEIgSYZpmR1kI8XwvCiGuNCyPiNJ9WHSM5AgmaE07z9f2gM0P4aj9TwTBTdOb1GrxViR8zMYX6NxW95GJBb84VmN8xpaoAJu3BdTxJymrXPQ7/wAbFhIzxoShuAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAxOC0wNi0yNFQyMzowODozMy0wNDowMPfELz8AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMTgtMDYtMjRUMjM6MDg6MzMtMDQ6MDCGmZeDAAAAAElFTkSuQmCC");
+}
+
+a:link {
+	text-Decoration:none;
+}
+a:hover {
+	text-Decoration:underline;
+}
+
+h2{
+  text-align: center;
+  margin-bottom: 30px;
+}
+#page_top{
+  width: 100px;
+  height: 100px;
+  position: fixed;
+  right: -100px;
+  bottom: 0px;
+  background: #3f98ef;
+  opacity: 0.6;
+  border-radius: 50%;
+}
+#page_top a{
+  position: relative;
+  display: block;
+  width: 100px;
+  height: 100px;
+  text-decoration: none;
+}
+#page_top a::before{
+//  font-family: 'Verdana';
+  font-weight: 900;
+  content: 'TOP';
+  font-size: 25px;
+  color: #fff;
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  top: 12px;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  margin: auto;
+  text-align: center;
+}
+</style>
+
+</html>
